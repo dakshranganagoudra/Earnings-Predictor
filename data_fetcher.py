@@ -157,8 +157,12 @@ def clean_data(df):
 if __name__ == "__main__":
 
     tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META',
-               'NVDA', 'JPM', 'BAC', 'TSLA', 'WMT',
-               'JNJ', 'PG', 'V', 'MA', 'HD']
+           'NVDA', 'TSLA', 'WMT', 'JNJ', 'PG',
+           'V', 'MA', 'HD', 'COST', 'NFLX',
+           'AMD', 'INTC', 'QCOM', 'CRM', 'ADBE',
+           'PYPL', 'UBER', 'ABNB', 'SNAP', 'SPOT',
+           'DIS', 'SBUX', 'MCD', 'NKE', 'BA',
+           'GE', 'F', 'GM', 'XOM', 'CVX']
 
     os.makedirs('data/raw', exist_ok=True)
     os.makedirs('data/cleaned', exist_ok=True)
