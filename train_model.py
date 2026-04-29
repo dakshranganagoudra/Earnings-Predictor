@@ -246,8 +246,10 @@ if __name__ == "__main__":
     # Feature importance
     plot_feature_importance(best_xgb, list(feature_cols))
 
-    # Save everything
+        # Save everything
     joblib.dump(best_xgb, 'models/xgb_earnings_predictor.pkl')
+    joblib.dump(le, 'models/label_encoder.pkl')
+    joblib.dump(feature_cols, 'models/feature_cols.pkl')
 
     print("\n✅ All models and charts saved!")
     print("  models/xgb_earnings_predictor.pkl")
