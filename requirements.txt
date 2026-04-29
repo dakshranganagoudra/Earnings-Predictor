@@ -1,0 +1,13 @@
+pandas
+numpy
+requests
+python-dotenv
+yfinance
+scikit-learn
+xgboost
+matplotlib
+seaborn
+joblib
+streamlit
+plotly
+vaderSentiment
