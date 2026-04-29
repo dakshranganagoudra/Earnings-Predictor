@@ -1,4 +1,3 @@
-import requests
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -7,38 +6,39 @@ import os
 import time
 
 load_dotenv()
-FMP_KEY = os.getenv("FMP_API_KEY")
 
 # ─────────────────────────────────────────
-# 1. PULL EARNINGS DATA FROM FMP
+# 1. PULL EARNINGS DATA FROM YFINANCE
 # ─────────────────────────────────────────
 
 def get_earnings_history(ticker):
-    url = f"https://financialmodelingprep.com/api/v3/historical/earning_calendar/{ticker}?apikey={FMP_KEY}"
     try:
-        response = requests.get(url)
-        data = response.json()
+        stock = yf.Ticker(ticker)
+        earnings = stock.earnings_history
 
-        if not data:
-            print(f"No data for {ticker}")
+        if earnings is None or earnings.empty:
+            print(f"  No earnings history for {ticker}")
             return None
 
-        df = pd.DataFrame(data)
-        df = df[['date', 'symbol', 'eps', 'epsEstimated', 'revenueEstimated', 'revenue']]
-        df.rename(columns={
-            'date': 'earnings_date',
-            'symbol': 'ticker',
-            'eps': 'actual_eps',
-            'epsEstimated': 'estimated_eps'
+        earnings = earnings.reset_index()
+
+        # Rename using actual column names yfinance returns
+        earnings.rename(columns={
+            'quarter': 'earnings_date',
+            'epsActual': 'actual_eps',
+            'epsEstimate': 'estimated_eps'
         }, inplace=True)
 
-        df.dropna(subset=['actual_eps', 'estimated_eps'], inplace=True)
-        return df
+        earnings['ticker'] = ticker
+        earnings['earnings_date'] = pd.to_datetime(earnings['earnings_date'])
+        earnings = earnings[['earnings_date', 'ticker', 'actual_eps', 'estimated_eps']].copy()
+        earnings.dropna(subset=['actual_eps', 'estimated_eps'], inplace=True)
+
+        return earnings
 
     except Exception as e:
-        print(f"Error fetching earnings for {ticker}: {e}")
+        print(f"  Error fetching {ticker}: {e}")
         return None
-
 
 # ─────────────────────────────────────────
 # 2. CALCULATE SURPRISE % AND LABELS
@@ -68,11 +68,24 @@ def calculate_surprise(df):
 def get_fundamentals(ticker):
     try:
         stock = yf.Ticker(ticker)
-        income = stock.quarterly_financials.T
+        income = stock.quarterly_financials
+
+        if income is None or income.empty:
+            return None
+
+        income = income.T
         income.index = pd.to_datetime(income.index)
 
-        income['revenue_growth'] = income['Total Revenue'].pct_change(periods=-1)
-        income['gross_margin'] = income['Gross Profit'] / income['Total Revenue']
+        # Try to get revenue and gross profit flexibly
+        rev_col = next((c for c in income.columns if 'Revenue' in str(c) and 'Total' in str(c)), None)
+        gp_col = next((c for c in income.columns if 'Gross' in str(c) and 'Profit' in str(c)), None)
+
+        if rev_col is None or gp_col is None:
+            print(f"  Missing income columns for {ticker}")
+            return None
+
+        income['revenue_growth'] = income[rev_col].pct_change(periods=-1)
+        income['gross_margin'] = income[gp_col] / income[rev_col]
 
         income = income[['revenue_growth', 'gross_margin']].copy()
         income['ticker'] = ticker
@@ -82,7 +95,7 @@ def get_fundamentals(ticker):
         return income
 
     except Exception as e:
-        print(f"Failed fundamentals for {ticker}: {e}")
+        print(f"  Failed fundamentals for {ticker}: {e}")
         return None
 
 
@@ -151,17 +164,17 @@ if __name__ == "__main__":
     os.makedirs('data/cleaned', exist_ok=True)
 
     # --- Pull earnings ---
-    print("📥 Fetching earnings data...")
+    print("📥 Fetching earnings data from Yahoo Finance...")
     all_earnings = []
     for ticker in tickers:
         print(f"  Fetching {ticker}...")
         df = get_earnings_history(ticker)
         if df is not None:
             all_earnings.append(df)
-        time.sleep(0.3)
+        time.sleep(0.5)
 
     if not all_earnings:
-        print("❌ No earnings data fetched. Check your FMP API key in .env")
+        print("❌ No earnings data fetched.")
         exit()
 
     earnings_df = pd.concat(all_earnings, ignore_index=True)
@@ -181,12 +194,12 @@ if __name__ == "__main__":
         time.sleep(0.5)
 
     if not all_fundamentals:
-        print("❌ No fundamentals data fetched.")
+        print("❌ No fundamentals fetched.")
         exit()
 
     fundamentals_df = pd.concat(all_fundamentals, ignore_index=True)
     fundamentals_df.to_csv('data/raw/fundamentals_raw.csv', index=False)
-    print(f"✅ Fundamentals data: {len(fundamentals_df)} rows")
+    print(f"✅ Fundamentals: {len(fundamentals_df)} rows")
 
     # --- Merge ---
     print("\n🔗 Merging datasets...")
