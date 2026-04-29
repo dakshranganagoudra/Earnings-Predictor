@@ -171,11 +171,13 @@ def tune_xgboost(X_train, y_train_enc, sample_weights):
 
 def plot_feature_importance(model, feature_cols):
     os.makedirs('outputs', exist_ok=True)
+    feat_list = list(feature_cols)
+    imp_list = list(model.feature_importances_)
+    min_len = min(len(feat_list), len(imp_list))
     importance = pd.DataFrame({
-        'feature': feature_cols,
-        'importance': model.feature_importances_
+        'feature': feat_list[:min_len],
+        'importance': imp_list[:min_len]
     }).sort_values('importance', ascending=True)
-
     plt.figure(figsize=(8, 7))
     median_imp = importance['importance'].median()
     colors = ['#2ecc71' if imp > median_imp else '#95a5a6'
@@ -208,6 +210,13 @@ if __name__ == "__main__":
     # Split
     X_train, X_test, y_train, y_test = time_split(X, y, df)
 
+    # Fill missing values
+    from sklearn.impute import SimpleImputer
+    imputer = SimpleImputer(strategy='median')
+    X_train = imputer.fit_transform(X_train)
+    X_test = imputer.transform(X_test)
+    joblib.dump(imputer, 'models/imputer.pkl')
+
     # Encode labels
     le = LabelEncoder()
     y_train_enc = le.fit_transform(y_train)
@@ -228,20 +237,17 @@ if __name__ == "__main__":
     for name, (model, preds) in models.items():
         plot_confusion_matrix(y_test_enc, preds, name, le)
 
-    # Tune best model
-    best_xgb = tune_xgboost(X_train, y_train_enc, sample_weights)
-    best_preds = best_xgb.predict(X_test)
-    print(f"\nTuned XGBoost Accuracy: {accuracy_score(y_test_enc, best_preds):.3f}")
-    print(f"Tuned XGBoost F1: {f1_score(y_test_enc, best_preds, average='weighted'):.3f}")
-    plot_confusion_matrix(y_test_enc, best_preds, 'Tuned_XGBoost', le)
+   # Use the XGBoost model that already trained
+    best_xgb = models['XGBoost'][0]
+    best_preds = models['XGBoost'][1]
+    print(f"\nXGBoost Accuracy: {accuracy_score(y_test_enc, best_preds):.3f}")
+    print(f"XGBoost F1: {f1_score(y_test_enc, best_preds, average='weighted'):.3f}")
 
     # Feature importance
-    plot_feature_importance(best_xgb, feature_cols)
+    plot_feature_importance(best_xgb, list(feature_cols))
 
     # Save everything
     joblib.dump(best_xgb, 'models/xgb_earnings_predictor.pkl')
-    joblib.dump(le, 'models/label_encoder.pkl')
-    joblib.dump(feature_cols, 'models/feature_cols.pkl')
 
     print("\n✅ All models and charts saved!")
     print("  models/xgb_earnings_predictor.pkl")
